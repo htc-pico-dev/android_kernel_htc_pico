@@ -6880,6 +6880,8 @@ void msm_nand_release(struct mtd_info *mtd)
 }
 EXPORT_SYMBOL_GPL(msm_nand_release);
 
+static const char *part_probes[] = { "cmdlinepart", NULL,  };
+
 struct msm_nand_info {
 	struct mtd_info		mtd;
 	struct mtd_partition	*parts;
@@ -6929,10 +6931,15 @@ static int msm_nand_nc10_xfr_settings(struct mtd_info *mtd)
 static int setup_mtd_device(struct platform_device *pdev,
 			     struct msm_nand_info *info)
 {
-	int i, err;
+	int i, nr_parts, err;
 	struct flash_platform_data *pdata = pdev->dev.platform_data;
 
-	if (pdata) {
+	nr_parts = parse_mtd_partitions(&info->mtd, part_probes, &info->parts,
+					0);
+
+	if (nr_parts > 0) {
+		err = mtd_device_register(&info->mtd, info->parts, nr_parts);
+	} else if (pdata && pdata->parts) {
 		for (i = 0; i < pdata->nr_parts; i++) {
 			pdata->parts[i].offset = pdata->parts[i].offset
 				* info->mtd.erasesize;

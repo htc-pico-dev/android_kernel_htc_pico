@@ -8,11 +8,14 @@
  *
  */
 
+#include <asm/mach/flash.h>
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
 #include <linux/mtd/mtd.h>
+#include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 
 #include <linux/crc32.h>
@@ -45,7 +48,8 @@ struct glumboot_partition_table {
 	struct glumboot_partition_type partitions[0];
 };
 
-static int offset = CONFIG_MTD_GLUMBOOT_OFFSET;
+extern struct flash_platform_data msm_nand_data;
+
 static const char magic[] = "glumboot";
 
 static struct mtd_partition glumboot_partitions[GLUMBOOT_MAX_NR_PARTS];
@@ -68,26 +72,15 @@ static int parse_glumboot_partitions(struct mtd_info *master,
 
 	dbg( "%s\n", __func__);
 
-	if ( offset < 0 ) {
-		search_addr = master->size - (uint32_t)(-offset * master->erasesize);
-		search_addr_limit = search_addr - (CONFIG_MTD_GLUMBOOT_SEARCH_DEPTH * master->erasesize);
-		while ( master->block_isbad &&
-		       master->block_isbad(master, search_addr)) {
-			if (!search_addr || search_addr == search_addr_limit) {
-			nogood:
-				printk(KERN_NOTICE "Failed to find a non-bad block to check for GlumBoot partition table\n");
-				return -EIO;
-			}
-			search_addr -= master->erasesize;
-		}
-	} else {
-		search_addr = (uint32_t)(offset * master->erasesize);
-		search_addr_limit = CONFIG_MTD_GLUMBOOT_SEARCH_DEPTH * master->erasesize;
-		while ( master->block_isbad &&
-		       master->block_isbad(master, offset)) {
-			search_addr += master->erasesize;
-			if (search_addr == master->size || search_addr == search_addr_limit)
-				goto nogood;
+	for (i = 0; i < msm_nand_data.nr_parts; i++) {
+		ptn = &msm_nand_data.parts[i];
+		dbg( "msm_nand_data.parts[%d].name: %s\n", i, ptn->name );
+
+		if (!strcmp(magic, ptn->name)) {
+			dbg( "  found glumboot partition, offset: %llx, size: %llx, limit: %llx\n", ptn->offset, ptn->size, ptn->offset + ptn->size );
+
+			search_addr = ptn->offset * master->erasesize;
+			search_addr_limit = (ptn->offset + ptn->size) * master->erasesize;
 		}
 	}
 
@@ -120,10 +113,7 @@ static int parse_glumboot_partitions(struct mtd_info *master,
 		}
 
 	search_next_block:
-		if (offset < 0)
-			search_addr -= master->erasesize;
-		else
-			search_addr += master->erasesize;
+		search_addr += master->erasesize;
 	}
 
 	if (!search_addr || search_addr == master->size || search_addr == search_addr_limit) {

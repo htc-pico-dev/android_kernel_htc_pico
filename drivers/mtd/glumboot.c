@@ -24,7 +24,7 @@
 #define ERRP "glumboot: "
 
 /* debug macro */
-#if 0
+#if 1
 #define dbg(...) do { printk( "DEBUG-GLUMBOOT: " __VA_ARGS__); } while(0)
 #else
 #define dbg(...)
